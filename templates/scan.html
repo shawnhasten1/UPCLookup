@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="ZXing for JS">
+
+  <title>ZXing TypeScript | Decoding from camera stream</title>
+
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+    href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+    href="https://unpkg.com/normalize.css@8.0.0/normalize.css">
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+    href="https://unpkg.com/milligram@1.3.0/dist/milligram.min.css">
+</head>
+
+<body ng-app=""id="page-top">
+
+  <!-- Page Wrapper -->
+  <div id="wrapper">
+    <div>
+      <a class="button" id="startButton">Start</a>
+      <a class="button" id="resetButton">Reset</a>
+    </div>
+
+    <div>
+      <video id="video" width="300" height="200" style="border: 1px solid gray"></video>
+    </div>
+
+    <div id="sourceSelectPanel" style="display:none">
+      <label for="sourceSelect">Change video source:</label>
+      <select id="sourceSelect" style="max-width:400px">
+      </select>
+    </div>
+
+    <label>Result:</label>
+    <pre><code id="result"></code></pre>      
+    
+    <p>See the <a href="https://github.com/zxing-js/library/tree/master/docs/examples/multi-camera/">source code</a>
+      for this example.</p>
+      <p id="jsonText">JsonText</p>
+      <a class="button" id="searchUPC">Start</a>
+
+  </main>
+  <!-- Bootstrap core JavaScript-->
+  <script src="static/vendor/jquery/jquery.min.js"></script>
+  <script src="static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Core plugin JavaScript-->
+  <script src="static/vendor/jquery-easing/jquery.easing.min.js"></script>
+  
+  <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
+  <script type="text/javascript">
+  var url = "api/v1/getEdamam?upc=";
+    $(document).ready(function(){
+      $("#searchUPC").click(function(){
+        url = document.getElementById('result').textContent;
+        var jqxhr = jQuery.get(url, function(data) {
+          console.log(data);
+          var jsonHTML = '';
+          jsonHTML += '<h1>'+data.name+'</h1>';
+          jsonHTML += '<h3>Ingredients</h3>';
+
+          var ingredientStr = JSON.stringify(data.ingredients);
+          try{
+            ingredientStr = ingredientStr.replace("INGREDIENTS: ", "");
+          }catch(error){}
+          try{
+          ingredientStr = ingredientStr.replace("\"", "");
+          }catch(error){}
+          try{
+          ingredientStr = ingredientStr.replace("\"", "");
+          }catch(error){}
+          try{
+          ingredientStr = ingredientStr.replace(".", "");
+          }catch(error){}
+          var ingredients = ingredientStr.split("; ");
+          console.log(ingredients.length);
+          if(ingredients.length == 1){
+            ingredients = ingredientStr.split(",");
+          }
+          jsonHTML += "<ul>";
+          for(var i = 0; i<ingredients.length; i++){
+            jsonHTML += "<li>"+ingredients[i]+"</li>"
+          }
+          jsonHTML += "</ul>";
+          document.getElementById("jsonText").innerHTML = jsonHTML;
+        })
+        .done(function() {
+          console.log( "second success" );
+        })
+        .fail(function() {
+            console.log( "error" );
+        })
+        .always(function() {
+          console.log( "finished" );
+        });
+
+        // Perform other work here ...
+        
+        // Set another completion function for the request above
+        jqxhr.always(function() {
+            console.log( "second finished" );
+        });
+      });
+    });
+    window.addEventListener('load', function () {
+      let selectedDeviceId;
+      const codeReader = new ZXing.BrowserMultiFormatReader()
+      console.log('ZXing code reader initialized')
+      codeReader.getVideoInputDevices()
+        .then((videoInputDevices) => {
+          const sourceSelect = document.getElementById('sourceSelect')
+          selectedDeviceId = videoInputDevices[0].deviceId
+          if (videoInputDevices.length >= 1) {
+            videoInputDevices.forEach((element) => {
+              const sourceOption = document.createElement('option')
+              sourceOption.text = element.label
+              sourceOption.value = element.deviceId
+              sourceSelect.appendChild(sourceOption)
+            })
+
+            sourceSelect.onchange = () => {
+              selectedDeviceId = sourceSelect.value;
+            };
+
+            const sourceSelectPanel = document.getElementById('sourceSelectPanel')
+            sourceSelectPanel.style.display = 'block'
+          }
+
+          document.getElementById('startButton').addEventListener('click', () => {
+            codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+              if (result) {
+                console.log(result)
+                document.getElementById('result').textContent = result.text;
+                upc = result.text;
+                url = "api/v1/getEdamam?upc="+upc;
+                console.log(String(upc).length);
+                document.getElementById("jsonText").innerHTML = url;
+                if(String(upc).length == 13){
+                  console.log("Too Long Going to shorten");
+                  document.getElementById("jsonText").innerHTML = "Too Long Going to shorten";
+                  document.getElementById("jsonText").innerHTML += "<br>"+url;
+                  upc = upc.substring(1);
+                  document.getElementById("jsonText").innerHTML += "<br>"+url;
+                  url = "api/v1/getEdamam?upc="+upc;
+                }
+                document.getElementById('result').textContent = url;
+                document.getElementById("searchUPC").click();
+              }
+              if (err && !(err instanceof ZXing.NotFoundException)) {
+                console.error(err)
+                document.getElementById('result').textContent = err
+              }
+            })
+            console.log(`Started continous decode from camera with id ${selectedDeviceId}`)
+          })
+
+          document.getElementById('resetButton').addEventListener('click', () => {
+            codeReader.reset()
+            document.getElementById('result').textContent = '';
+            console.log('Reset.')
+          })
+
+        })
+        .catch((err) => {
+          console.error(err)
+        })
+    })
+  </script>
+  
+  <script>
+      setTimeout(function(){ document.getElementById('startButton').click(); }, 1000);
+  </script>
+
+</body>
+
+</html>
